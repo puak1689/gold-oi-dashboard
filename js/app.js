@@ -91,8 +91,10 @@ function renderGauge(d) {
 }
 
 // ── compact bell curve (SVG, full-width, fixed height = mobile friendly) ──
+let bellData = { points: [] };   // {strike, xFrac, call, put} per bar, for hover/tap tooltips
 function buildBell(d) {
   const sd = sigmaOf(d), mean = d.future;
+  bellData = { points: [] };
   if (!sd || !d.rows.length) return '';
   const W = 1000, baseY = 186, topPad = 12;
   const xMin = mean - 3.5 * sd, span = 7 * sd;
@@ -125,6 +127,9 @@ function buildBell(d) {
   }
   const mx = xPx(mean).toFixed(1);
   grid += `<line x1="${mx}" y1="0" x2="${mx}" y2="${baseY}" class="bell-mean"/>`;
+
+  // strike → fractional x position (0..1 across the chart) for the hover tooltip
+  bellData = { points: rows.map((r) => ({ strike: r.strike, xFrac: xPx(r.strike) / W, call: r.call, put: r.put })) };
 
   // IV smile (Vol Settle) — per-strike implied vol, own-scaled into the upper band
   const ivRows = rows.filter((r) => r.iv > 0);
@@ -365,10 +370,45 @@ function setAuto(on) {
   if (on) state.timer = setInterval(load, 60000);
 }
 
+// ── bell-curve hover/tap tooltip: snaps to the nearest strike, shows Call/Put ──
+function initBellHover() {
+  const bell = $('bell'), wrap = document.querySelector('.bell-wrap');
+  const cross = $('bell-cross'), tip = $('bell-tip');
+  const move = (clientX) => {
+    const svg = bell.querySelector('svg');
+    if (!svg || !bellData.points.length) return;
+    const sr = svg.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientX - sr.left) / sr.width));
+    let best = bellData.points[0], bd = Infinity;
+    for (const p of bellData.points) {
+      const dd = Math.abs(p.xFrac - frac);
+      if (dd < bd) { bd = dd; best = p; }
+    }
+    const x = (sr.left - wr.left) + best.xFrac * sr.width;
+    cross.style.display = 'block';
+    cross.style.left = x + 'px';
+    cross.style.top = (sr.top - wr.top) + 'px';
+    cross.style.height = sr.height + 'px';
+    tip.style.display = 'block';
+    tip.innerHTML = `<b>${best.strike}</b> · <span style="color:var(--call)">C ${fmt.int(best.call)}</span> · <span style="color:var(--put)">P ${fmt.int(best.put)}</span>`;
+    let tx = x + 10;
+    if (tx + tip.offsetWidth > wr.width - 4) tx = x - tip.offsetWidth - 10;
+    tip.style.left = Math.max(4, tx) + 'px';
+    tip.style.top = (sr.top - wr.top + 6) + 'px';
+  };
+  const hide = () => { cross.style.display = 'none'; tip.style.display = 'none'; };
+  bell.addEventListener('mousemove', (e) => move(e.clientX));
+  bell.addEventListener('mouseleave', hide);
+  bell.addEventListener('touchstart', (e) => { if (e.touches[0]) move(e.touches[0].clientX); }, { passive: true });
+  bell.addEventListener('touchmove', (e) => { if (e.touches[0]) move(e.touches[0].clientX); }, { passive: true });
+  bell.addEventListener('touchend', hide);
+}
+
 // ── init ──
 function init() {
   applyTheme();
   mountTradingView();
+  initBellHover();
   $('btn-theme').addEventListener('click', toggleTheme);
   $('btn-refresh').addEventListener('click', load);
   $('seg-oi').addEventListener('click', () => setView('oi'));

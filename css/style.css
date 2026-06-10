@@ -434,6 +434,7 @@ footer {
 
 /* ── BELL CURVE ── */
 .bell-wrap {
+  position: relative;
   background: var(--bg1);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -441,6 +442,17 @@ footer {
   margin-bottom: 14px;
   box-shadow: var(--shadow);
 }
+.bell-cross {
+  position: absolute; width: 1px; display: none; z-index: 2;
+  background: var(--fg1); opacity: 0.45; pointer-events: none;
+}
+.bell-tip {
+  position: absolute; display: none; z-index: 3; pointer-events: none;
+  background: var(--bg0); border: 1px solid var(--line2); border-radius: 6px;
+  padding: 3px 8px; font-family: var(--mono); font-size: 11px; color: var(--fg0);
+  white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+}
+.bell-tip b { font-weight: 600; }
 .bell-svg { width: 100%; height: 240px; display: block; }
 .bell-curve { fill: none; stroke: var(--fg2); stroke-width: 1.4; opacity: 0.85; }
 .bell-base  { stroke: var(--line2); stroke-width: 1; }
