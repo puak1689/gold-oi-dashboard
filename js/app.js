@@ -260,20 +260,38 @@ function renderPlan(p) {
   }
   const biasMap = { long: ['ขึ้น · Long', 'b-long'], short: ['ลง · Short', 'b-short'], neutral: ['ไซด์เวย์ · Neutral', 'b-neutral'] };
   const [biasTxt, biasCls] = biasMap[p.bias] || biasMap.neutral;
+
+  // levels show CFD primary + futures reference
   const lvls = (arr, cls, label) => (arr && arr.length)
-    ? `<div class="plan-lvls"><span class="plan-lbl ${cls}">${label}</span>${arr.map((l) =>
-        `<span class="plan-lvl ${cls}">${fmt.px(l.price)}${l.note ? ` <i>${esc(l.note)}</i>` : ''}</span>`).join('')}</div>`
+    ? `<div class="plan-lvls"><span class="plan-lbl ${cls}">${label}</span>${arr.map((l) => {
+        const main = l.cfd != null ? fmt.px(l.cfd) : fmt.px(l.price);
+        const fut = l.cfd != null ? ` <i>fut ${l.price}</i>` : '';
+        return `<span class="plan-lvl ${cls}">${main}${fut}${l.note ? ` <i>· ${esc(l.note)}</i>` : ''}</span>`;
+      }).join('')}</div>`
     : '';
+
+  const entries = (p.entries && p.entries.length)
+    ? `<div class="plan-entries"><div class="plan-eh">🎯 จุดเข้า (ราคา CFD/XAUUSD)</div>${p.entries.map((en) =>
+        `<div class="entry"><span class="entry-side ${en.side === 'short' ? 'b-short' : 'b-long'}">${en.side === 'short' ? 'SHORT' : 'LONG'}</span>` +
+        `<div class="entry-body"><div class="entry-title">${esc(en.title || '')}</div>` +
+        `<div class="entry-nums">เข้า <b>${fmt.px(en.entry)}</b> · SL <b class="c-sl">${fmt.px(en.sl)}</b> · TP <b class="c-tp">${(en.tp || []).map((t) => fmt.px(t)).join(' / ')}</b> · <span class="c-rr">${esc(en.rr || '')}</span></div>` +
+        (en.note ? `<div class="entry-note">${esc(en.note)}</div>` : '') +
+        `</div></div>`).join('')}</div>`
+    : '';
+
   let when = '';
-  try { when = p.updated_at ? new Date(p.updated_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : ''; } catch (e) {}
+  try { when = new Date(p.updated_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) {}
+
   el.innerHTML =
     `<div class="plan-head">
        <span class="plan-title">📋 แผนวันนี้ <span class="plan-bias ${biasCls}">${biasTxt}</span></span>
        <span class="plan-time">รอบ ${esc(p.session || '')} · ${when}</span>
      </div>` +
+    (p.spot_cfd != null ? `<div class="plan-cfd">💱 CFD/XAUUSD ≈ <b>${fmt.px(p.spot_cfd)}</b> · futures ${fmt.px(p.future)} · basis −${fmt.px(p.basis)}${p.basis_live ? '' : ' <i>(ประมาณ)</i>'}</div>` : '') +
     (p.headline ? `<div class="plan-headline">${esc(p.headline)}</div>` : '') +
     lvls(p.resistance, 'res', 'แนวต้าน') +
     lvls(p.support, 'sup', 'แนวรับ') +
+    entries +
     (p.scenarios && p.scenarios.length ? `<ul class="plan-scen">${p.scenarios.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : '') +
     (p.risk ? `<div class="plan-risk">⚠️ ${esc(p.risk)}</div>` : '') +
     `<div class="plan-src">ที่มา: ${esc(p.source || 'The Invisible Money + OI/Vol')} · AI สร้างอัตโนมัติ ไม่ใช่คำแนะนำการลงทุน</div>`;
