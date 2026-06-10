@@ -128,8 +128,13 @@ function buildBell(d) {
   const mx = xPx(mean).toFixed(1);
   grid += `<line x1="${mx}" y1="0" x2="${mx}" y2="${baseY}" class="bell-mean"/>`;
 
-  // strike → fractional x position (0..1 across the chart) for the hover tooltip
-  bellData = { points: rows.map((r) => ({ strike: r.strike, xFrac: xPx(r.strike) / W, call: r.call, put: r.put })) };
+  // per-strike data for the hover tooltip: position + Call/Put + σ-distance + %OI
+  const totalOI = rows.reduce((a, r) => a + r.call + r.put, 0) || 1;
+  bellData = { points: rows.map((r) => ({
+    strike: r.strike, xFrac: xPx(r.strike) / W, call: r.call, put: r.put,
+    sdist: sd ? (r.strike - mean) / sd : 0,
+    pct: (r.call + r.put) / totalOI * 100,
+  })) };
 
   // IV smile (Vol Settle) — per-strike implied vol, own-scaled into the upper band
   const ivRows = rows.filter((r) => r.iv > 0);
@@ -390,7 +395,13 @@ function initBellHover() {
     cross.style.top = (sr.top - wr.top) + 'px';
     cross.style.height = sr.height + 'px';
     tip.style.display = 'block';
-    tip.innerHTML = `<b>${best.strike}</b> · <span style="color:var(--call)">C ${fmt.int(best.call)}</span> · <span style="color:var(--put)">P ${fmt.int(best.put)}</span>`;
+    const sdTxt = (best.sdist >= 0 ? '+' : '') + best.sdist.toFixed(1) + 'σ';
+    const pctLbl = state.view === 'intraday' ? 'vol' : 'OI';
+    tip.innerHTML =
+      `<b>${best.strike}</b> <span class="t-mut">${sdTxt}</span><br>` +
+      `<span style="color:var(--call)">C ${fmt.int(best.call)}</span> · ` +
+      `<span style="color:var(--put)">P ${fmt.int(best.put)}</span> · ` +
+      `<span class="t-mut">${best.pct.toFixed(1)}% ${pctLbl}</span>`;
     let tx = x + 10;
     if (tx + tip.offsetWidth > wr.width - 4) tx = x - tip.offsetWidth - 10;
     tip.style.left = Math.max(4, tx) + 'px';
