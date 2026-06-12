@@ -450,9 +450,33 @@ def notify_telegram(plan):
             time.sleep(5)
 
 
+def plan_is_fresh():
+    """True if plan.json was already generated for the current 13:00/19:00 slot.
+    Lets a backup runner (late cron / local Task Scheduler) skip without double-sending."""
+    try:
+        from datetime import timedelta
+        with open(PLAN_PATH, encoding="utf-8") as f:
+            cur = json.load(f)
+        from datetime import datetime
+        plan_ts = datetime.fromisoformat(cur["updated_at"]).timestamp()
+        now = _bkk_now()
+        if now.hour >= 19:
+            slot = now.replace(hour=19, minute=0, second=0, microsecond=0)
+        elif now.hour >= 13:
+            slot = now.replace(hour=13, minute=0, second=0, microsecond=0)
+        else:
+            slot = now.replace(hour=19, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        return plan_ts >= slot.timestamp()
+    except Exception:
+        return False
+
+
 def main():
     no_push = "--no-push" in sys.argv
     no_telegram = "--no-telegram" in sys.argv
+    if "--if-stale" in sys.argv and plan_is_fresh():
+        print("plan already fresh for this slot — skipping (backup runner)")
+        return
     stats = ps.compute_stats()
     plan = build_plan(stats)
     try:
