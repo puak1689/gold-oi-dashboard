@@ -17,6 +17,7 @@ import json
 import time
 import subprocess
 import urllib.request
+import urllib.parse
 import plan_stats as ps
 
 # Live gold spot proxy = PAXG (Pax Gold, 1 token ≈ 1oz, tracks XAU spot). Try several
@@ -250,8 +251,59 @@ def git_push(session):
     print("git push: FAILED after 3 attempts — commit stays local, next run will retry")
 
 
+def notify_telegram(plan):
+    """Send a Thai plan summary to Telegram. Reads TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+    from environment (GitHub Secrets on Actions); silently skips when not configured."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat:
+        print("telegram: skipped (no TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
+        return
+
+    bias_icon = {"long": "🟢 LONG", "short": "🔴 SHORT", "neutral": "⚪ NEUTRAL"}.get(plan["bias"], plan["bias"])
+    fmt1 = lambda x: f"{x:,.1f}"
+    lv = lambda arr: " · ".join(fmt1(l["cfd"]) for l in arr)
+    lines = [
+        f"📋 แผนทอง GC · รอบ {plan['session']} · {plan['updated_at'][:10]}",
+        f"{bias_icon}",
+        f"💱 CFD ≈ {fmt1(plan['spot_cfd'])} (fut {fmt1(plan['future'])} · basis −{plan['basis']:g})",
+        "",
+        f"แนวต้าน: {lv(plan['resistance'])}",
+        f"แนวรับ: {lv(plan['support'])}",
+        "",
+        "🎯 จุดเข้า (CFD/XAUUSD):",
+    ]
+    for en in plan["entries"]:
+        side = "LONG" if en["side"] == "long" else "SHORT"
+        tps = "/".join(fmt1(t) for t in en["tp"])
+        lines.append(f"• {side} {en['title']}")
+        lines.append(f"   เข้า {fmt1(en['entry'])} · SL {fmt1(en['sl'])} · TP {tps} · {en['rr']}")
+    lines += [
+        "",
+        "⚠️ รอไส้เทียน H1/H4 ยืนยันก่อนเข้า · เทียบราคากับโบรกฯ ของคุณ",
+        "📊 https://perpetualpp-rgb.github.io/gold-oi-dashboard/",
+        "ไม่ใช่คำแนะนำการลงทุน",
+    ]
+    data = urllib.parse.urlencode({
+        "chat_id": chat,
+        "text": "\n".join(lines),
+        "disable_web_page_preview": "true",
+    }).encode("utf-8")
+    for attempt in (1, 2):
+        try:
+            req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                ok = json.load(r).get("ok")
+            print(f"telegram: {'sent' if ok else 'api returned not-ok'}")
+            return
+        except Exception as e:
+            print(f"telegram attempt {attempt} failed: {e}")
+            time.sleep(5)
+
+
 def main():
     no_push = "--no-push" in sys.argv
+    no_telegram = "--no-telegram" in sys.argv
     stats = ps.compute_stats()
     plan = build_plan(stats)
     with open(PLAN_PATH, "w", encoding="utf-8") as f:
@@ -262,6 +314,10 @@ def main():
         print("(--no-push: skipped git)")
     else:
         git_push(plan["session"])
+    if no_telegram:
+        print("(--no-telegram: skipped notify)")
+    else:
+        notify_telegram(plan)
 
 
 if __name__ == "__main__":
