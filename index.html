@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 <div class="page">
@@ -59,7 +59,13 @@
 
   <!-- ── BELL CURVE (compact distribution) ── -->
   <section class="bell-wrap">
-    <div class="bell-srctime" id="data-time"><!-- source update time by app.js --></div>
+    <div class="bell-top">
+      <div class="bell-srctime" id="data-time"><!-- source update time by app.js --></div>
+      <div class="mini-seg" title="สลับหน่วยราคาแกนกราฟ">
+        <button class="mini-btn active" id="px-fut">Futures</button>
+        <button class="mini-btn" id="px-cfd">CFD</button>
+      </div>
+    </div>
     <div id="bell"><!-- svg by app.js --></div>
     <div class="bell-cross" id="bell-cross"></div>
     <div class="bell-tip" id="bell-tip"></div>
@@ -99,6 +105,6 @@
 </div>
 
 <script src="js/data.js?v=2"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

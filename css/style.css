@@ -520,11 +520,24 @@ footer {
 }
 .bell-tip b { font-weight: 600; }
 .bell-tip .t-mut { color: var(--fg2); }
+.bell-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+}
 .bell-srctime {
   display: flex; align-items: center; gap: 6px;
   font-family: var(--mono); font-size: 10px; color: var(--fg2);
-  margin-bottom: 8px;
 }
+.mini-seg {
+  display: inline-flex; background: var(--bg2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 2px;
+}
+.mini-btn {
+  font-family: var(--mono); font-size: 10px; padding: 3px 9px;
+  border: none; background: transparent; color: var(--fg2);
+  border-radius: 5px; cursor: pointer;
+}
+.mini-btn.active { background: var(--accent); color: var(--bg0); }
 .srcdot { width: 7px; height: 7px; border-radius: 50%; background: var(--fg3); flex-shrink: 0; }
 .srcdot.fresh { background: var(--up); box-shadow: 0 0 0 2px rgba(47,143,78,0.18); }
 .srcdot.ok    { background: var(--put); }

@@ -10,7 +10,12 @@ const state = {
   timer: null,
   dataTimeIso: null,                           // when pageth last pushed the data (GitHub commit time)
   lastDataTimeFetch: 0,
+  priceMode: localStorage.getItem('priceMode') || 'fut',   // 'fut' | 'cfd' — bell axis/tooltip unit
+  basis: 30,                                   // futures − CFD gap; refreshed from plan.json
 };
+
+// convert a futures price to the displayed unit
+const toPx = (v) => state.priceMode === 'cfd' ? v - state.basis : v;
 
 const fmt = {
   int: (n) => (n || 0).toLocaleString('en-US'),
@@ -164,7 +169,7 @@ function renderBell(d) {
   $('bell-axis').innerHTML = [-3, -2, -1, 0, 1, 2, 3].map((m) => {
     const pos = (3.5 + m) / 7 * 100;
     const lbl = m === 0 ? 'μ' : (m > 0 ? '+' : '') + m + 'σ';
-    return `<span style="left:${pos}%">${lbl}<br><i>${Math.round(mean + m * sd)}</i></span>`;
+    return `<span style="left:${pos}%">${lbl}<br><i>${Math.round(toPx(mean + m * sd))}</i></span>`;
   }).join('');
 
   const ivs = d.rows.map((r) => r.iv).filter((v) => v > 0);
@@ -370,10 +375,30 @@ async function loadPlan() {
   try {
     const res = await fetch('plan.json?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('no plan');
-    renderPlan(await res.json());
+    const p = await res.json();
+    renderPlan(p);
+    // adopt the plan's live basis for the bell-chart CFD mode
+    if (typeof p.basis === 'number' && p.basis > -5 && p.basis < 80) {
+      const changed = Math.abs(p.basis - state.basis) > 0.01;
+      state.basis = p.basis;
+      if (changed && state.priceMode === 'cfd') rerenderBell();
+    }
   } catch (e) {
     renderPlan(null);
   }
+}
+
+function rerenderBell() {
+  const d = state.view === 'intraday' ? state.data.intraday : state.data.oi;
+  if (d) renderBell(d);
+}
+
+function setPriceMode(mode) {
+  state.priceMode = mode;
+  localStorage.setItem('priceMode', mode);
+  $('px-fut').classList.toggle('active', mode === 'fut');
+  $('px-cfd').classList.toggle('active', mode === 'cfd');
+  rerenderBell();
 }
 
 // ── source-data freshness: when pageth last pushed OIData.txt (GitHub commit time) ──
@@ -520,8 +545,11 @@ function initBellHover() {
     tip.style.display = 'block';
     const sdTxt = (best.sdist >= 0 ? '+' : '') + best.sdist.toFixed(1) + 'σ';
     const pctLbl = state.view === 'intraday' ? 'vol' : 'OI';
+    const cfdVal = (best.strike - state.basis).toFixed(1);
+    const mainPx = state.priceMode === 'cfd' ? cfdVal : best.strike;
+    const altPx  = state.priceMode === 'cfd' ? `fut ${best.strike}` : `cfd ${cfdVal}`;
     tip.innerHTML =
-      `<b>${best.strike}</b> <span class="t-mut">${sdTxt}</span><br>` +
+      `<b>${mainPx}</b> <span class="t-mut">${sdTxt} · ${altPx}</span><br>` +
       `<span style="color:var(--call)">C ${fmt.int(best.call)}</span> · ` +
       `<span style="color:var(--put)">P ${fmt.int(best.put)}</span> · ` +
       `<span class="t-mut">${best.pct.toFixed(1)}% ${pctLbl}</span>`;
@@ -549,6 +577,9 @@ function init() {
   $('seg-intraday').addEventListener('click', () => setView('intraday'));
   $('seg-both').addEventListener('click', () => setView('both'));
   $('chk-auto').addEventListener('change', (e) => setAuto(e.target.checked));
+  $('px-fut').addEventListener('click', () => setPriceMode('fut'));
+  $('px-cfd').addEventListener('click', () => setPriceMode('cfd'));
+  if (state.priceMode === 'cfd') { $('px-fut').classList.remove('active'); $('px-cfd').classList.add('active'); }
 
   // auto-refresh ON unless the user turned it off before
   const autoOn = (localStorage.getItem('auto') || 'on') === 'on';
