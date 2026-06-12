@@ -401,7 +401,92 @@ def log_plan_and_evaluate(plan):
     print(f"track: plans={len(rows)} stats={stats}")
 
 
-def notify_telegram(plan):
+# ── bell-curve chart image for Telegram (English labels — server fonts lack Thai) ──
+
+def render_chart_png(plan):
+    """Draw the OI bell chart (distribution + Call/Put bars + IV smile + σ axis)
+    to a temp PNG. Returns path, or None if matplotlib unavailable / data bad."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("chart: matplotlib not installed (pip install matplotlib) — text-only")
+        return None
+    try:
+        import math
+        import tempfile
+        d = ps.parse(ps.fetch(ps.OI_URL))
+        sd, mean = ps.sigma(d), d["future"]
+        rows = [r for r in d["rows"] if abs(r["strike"] - mean) <= 3.6 * sd] if sd else []
+        if not sd or len(rows) < 5:
+            return None
+
+        BG, CALL, PUT, CURVE, IVC, FUT = "#faf6ee", "#1a3a6b", "#c9920a", "#8a8378", "#3f8f8f", "#b08010"
+        gaps = sorted(b["strike"] - a["strike"] for a, b in zip(rows, rows[1:]))
+        gap = gaps[len(gaps) // 2] if gaps else 5
+        w, off = gap * 0.32, gap * 0.18
+
+        fig, ax = plt.subplots(figsize=(10, 5.2), dpi=130)
+        fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
+
+        ymax = max(max(r["call"], r["put"]) for r in rows) * 1.28 or 1
+        for k in (-3, -2, -1, 1, 2, 3):
+            ax.axvline(mean + k * sd, color=CURVE, lw=0.7, ls=":", alpha=0.5)
+        ax.axvline(mean, color=FUT, lw=1.1, ls="--", alpha=0.85)
+
+        ax.bar([r["strike"] + off for r in rows], [r["call"] for r in rows], width=w, color=CALL, alpha=0.85, label="Call OI")
+        ax.bar([r["strike"] - off for r in rows], [r["put"] for r in rows], width=w, color=PUT, alpha=0.85, label="Put OI")
+
+        xs = [mean - 3.5 * sd + 7 * sd * i / 160 for i in range(161)]
+        peak = 1 / (sd * math.sqrt(2 * math.pi))
+        ax.plot(xs, [math.exp(-0.5 * ((x - mean) / sd) ** 2) / (sd * math.sqrt(2 * math.pi)) / peak * ymax * 0.86 for x in xs],
+                color=CURVE, lw=1.3, label="Expected range")
+
+        ivr = [(r["strike"], r["iv"]) for r in rows if r["iv"] > 0]
+        if len(ivr) > 2:
+            ivs = [v for _, v in ivr]
+            lo, rng = min(ivs), (max(ivs) - min(ivs)) or 1
+            ax.plot([s for s, _ in ivr], [ymax * (0.58 + 0.36 * (v - lo) / rng) for _, v in ivr],
+                    color=IVC, lw=1.4, ls="--", label=f"IV smile {min(ivs)*100:.1f}–{max(ivs)*100:.1f}%")
+
+        basis = plan.get("basis", 30)
+        ticks = [mean + k * sd for k in range(-3, 4)]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([("μ" if k == 0 else f"{k:+d}σ") + f"\n{round(mean + k * sd):.0f}" for k in range(-3, 4)],
+                           fontsize=8, color="#4a4338")
+        ax.set_xlim(mean - 3.6 * sd, mean + 3.6 * sd); ax.set_ylim(0, ymax)
+        ax.tick_params(axis="y", labelsize=7, colors="#8a8378")
+        for s in ("top", "right", "left"): ax.spines[s].set_visible(False)
+        ax.spines["bottom"].set_color("#ddd4c4")
+
+        ax.set_title(f"Gold (OG|GC) Open Interest · {plan['session']} · {plan['updated_at'][:10]}\n"
+                     f"future {mean:,.1f} · CFD ≈ {mean - basis:,.1f} (basis −{basis:g}) · 1σ = {sd:,.1f} pts",
+                     fontsize=10, color="#1f1a14", loc="left", pad=10)
+        ax.legend(loc="upper right", fontsize=7.5, frameon=False, labelcolor="#4a4338")
+
+        out = os.path.join(tempfile.gettempdir(), "gold_oi_chart.png")
+        fig.tight_layout(); fig.savefig(out, facecolor=BG); plt.close(fig)
+        print("chart: rendered", out)
+        return out
+    except Exception as e:
+        print("chart render failed:", e)
+        return None
+
+
+def _post_multipart(url, fields, file_bytes, filename):
+    boundary = "----goldoi" + str(int(time.time()))
+    body = b""
+    for k, v in fields.items():
+        body += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").encode("utf-8")
+    body += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"{filename}\"\r\n"
+             f"Content-Type: image/png\r\n\r\n").encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def notify_telegram(plan, chart_path=None):
     """Send a Thai plan summary to Telegram. Reads TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
     from environment (GitHub Secrets on Actions); silently skips when not configured."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -433,20 +518,35 @@ def notify_telegram(plan):
         "⚠️ รอไส้เทียน H1/H4 ยืนยันก่อนเข้า · เทียบราคากับโบรกฯ ของคุณ",
         "ไม่ใช่คำแนะนำการลงทุน",
     ]
-    data = urllib.parse.urlencode({
-        "chat_id": chat,
-        "text": "\n".join(lines),
-        "disable_web_page_preview": "true",
-    }).encode("utf-8")
+    text = "\n".join(lines)
+
+    def send_text(body):
+        data = urllib.parse.urlencode({"chat_id": chat, "text": body,
+                                       "disable_web_page_preview": "true"}).encode("utf-8")
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.load(r).get("ok")
+
     for attempt in (1, 2):
         try:
-            req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
-            with urllib.request.urlopen(req, timeout=15) as r:
-                ok = json.load(r).get("ok")
-            print(f"telegram: {'sent' if ok else 'api returned not-ok'}")
+            if chart_path and os.path.exists(chart_path):
+                with open(chart_path, "rb") as f:
+                    png = f.read()
+                if len(text) <= 1024:        # Telegram photo-caption limit
+                    ok = _post_multipart(f"https://api.telegram.org/bot{token}/sendPhoto",
+                                         {"chat_id": chat, "caption": text}, png, "chart.png").get("ok")
+                else:
+                    ok = _post_multipart(f"https://api.telegram.org/bot{token}/sendPhoto",
+                                         {"chat_id": chat}, png, "chart.png").get("ok")
+                    ok = send_text(text) and ok
+                print(f"telegram: {'photo+plan sent' if ok else 'api returned not-ok'}")
+            else:
+                ok = send_text(text)
+                print(f"telegram: {'sent' if ok else 'api returned not-ok'}")
             return
         except Exception as e:
             print(f"telegram attempt {attempt} failed: {e}")
+            chart_path = None          # photo path failed once → retry as text-only
             time.sleep(5)
 
 
@@ -499,7 +599,7 @@ def main():
     if no_telegram:
         print("(--no-telegram: skipped notify)")
     else:
-        notify_telegram(plan)
+        notify_telegram(plan, render_chart_png(plan))
 
 
 if __name__ == "__main__":

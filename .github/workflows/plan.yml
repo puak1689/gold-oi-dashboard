@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install chart dependency
+        run: pip install --quiet matplotlib
+
       - name: Generate plan.json
         run: python generate_plan.py --no-push --if-stale
         env:
