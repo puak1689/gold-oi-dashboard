@@ -1,0 +1,50 @@
+name: Mirror OI Data
+
+# Insurance: copy pageth's OI/Intraday files into THIS repo (data/mirror/) every
+# ~30 min. If pageth ever deletes their repo or goes down, the dashboard + plan
+# fall back to this mirror (last-known good data) — so we're never left dataless.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pageth files (keep last good copy on failure)
+        run: |
+          mkdir -p data/mirror
+          for f in OIData IntradayData; do
+            if curl -sf --max-time 25 "https://raw.githubusercontent.com/pageth/Vol2VolData/main/$f.txt" -o "/tmp/$f.txt" && [ -s "/tmp/$f.txt" ]; then
+              cp "/tmp/$f.txt" "data/mirror/$f.txt"
+              echo "mirrored $f.txt"
+            else
+              echo "WARN: $f.txt fetch failed — keeping last mirrored copy"
+            fi
+          done
+          date -u +%Y-%m-%dT%H:%MZ > data/mirror/_mirrored_at.txt
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # only the data files decide "changed" — the timestamp file alone shouldn't spam commits
+          git add data/mirror/OIData.txt data/mirror/IntradayData.txt
+          if git diff --cached --quiet; then
+            echo "no data change — skip"
+          else
+            git add data/mirror/_mirrored_at.txt
+            git commit -m "Mirror pageth OI data $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull --rebase -X ours origin main
+            git push
+          fi

@@ -13,12 +13,27 @@ const DATA_SOURCE = {
   oi:       'https://raw.githubusercontent.com/pageth/Vol2VolData/main/OIData.txt',
   intraday: 'https://raw.githubusercontent.com/pageth/Vol2VolData/main/IntradayData.txt',
 };
+// our own mirror (same-origin on GitHub Pages) — fallback if pageth is unreachable/deleted
+const DATA_FALLBACK = {
+  oi:       'data/mirror/OIData.txt',
+  intraday: 'data/mirror/IntradayData.txt',
+};
 
-// fetch raw text; cache-bust so GitHub's 5-min CDN cache doesn't serve stale data
-async function fetchText(url) {
-  const res = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
+async function fetchOne(url) {
+  const res = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.text();
+  const txt = await res.text();
+  if (!txt.trim()) throw new Error('empty');
+  return txt;
+}
+
+// fetch raw text; try pageth first, fall back to our mirror. Returns { text, fb }.
+async function fetchText(primary, fallback) {
+  try { return { text: await fetchOne(primary), fb: false }; }
+  catch (e) {
+    if (fallback) return { text: await fetchOne(fallback), fb: true };   // throws if mirror also dead
+    throw e;
+  }
 }
 
 function parseVol2Vol(text) {

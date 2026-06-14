@@ -431,18 +431,23 @@ function renderDataTime(iso) {
 async function load() {
   setStatus('กำลังโหลด…');
   try {
-    const [oiTxt, inTxt] = await Promise.all([
-      fetchText(DATA_SOURCE.oi),
-      fetchText(DATA_SOURCE.intraday),
+    const [oiR, inR] = await Promise.all([
+      fetchText(DATA_SOURCE.oi, DATA_FALLBACK.oi),
+      fetchText(DATA_SOURCE.intraday, DATA_FALLBACK.intraday),
     ]);
-    state.data.oi = parseVol2Vol(oiTxt);
-    state.data.intraday = parseVol2Vol(inTxt);
+    state.data.oi = parseVol2Vol(oiR.text);
+    state.data.intraday = parseVol2Vol(inR.text);
+    state.dataFallback = oiR.fb || inR.fb;
     render();
     const now = new Date().toLocaleTimeString('th-TH');
-    setStatus('อัปเดตล่าสุด ' + now, 'live');
+    if (state.dataFallback) {
+      setStatus('⚠ ใช้ข้อมูลสำรอง (pageth ล่ม) · ' + now, 'err');
+    } else {
+      setStatus('อัปเดตล่าสุด ' + now, 'live');
+    }
     $('data-stamp').textContent = 'sync ' + now;
   } catch (e) {
-    setStatus('ดึงข้อมูลไม่สำเร็จ: ' + e.message, 'err');
+    setStatus('ดึงข้อมูลไม่สำเร็จ (ทั้ง pageth + สำรอง): ' + e.message, 'err');
   }
   // source-data freshness: re-render relative time every cycle; re-fetch commit time every 3 min
   if (state.dataTimeIso) renderDataTime(state.dataTimeIso);

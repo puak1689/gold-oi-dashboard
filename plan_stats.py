@@ -28,6 +28,11 @@ except Exception:
 
 OI_URL = "https://raw.githubusercontent.com/pageth/Vol2VolData/main/OIData.txt"
 IN_URL = "https://raw.githubusercontent.com/pageth/Vol2VolData/main/IntradayData.txt"
+# Our own mirror of pageth's files (kept fresh by mirror.yml) — used automatically
+# if pageth is unreachable/deleted, so the dashboard never goes dataless.
+OI_MIRROR = "https://raw.githubusercontent.com/perpetualpp-rgb/gold-oi-dashboard/main/data/mirror/OIData.txt"
+IN_MIRROR = "https://raw.githubusercontent.com/perpetualpp-rgb/gold-oi-dashboard/main/data/mirror/IntradayData.txt"
+MIRROR = {OI_URL: OI_MIRROR, IN_URL: IN_MIRROR}
 
 BASIS = 30.0   # approx Gold futures premium over XAUUSD spot (book: ~$30; ->0 near expiry)
 
@@ -41,10 +46,20 @@ def tz_bkk():
 
 
 def fetch(url):
+    """Fetch a data file; if the primary (pageth) fails, fall back to our mirror."""
     bust = str(int(datetime.now(timezone.utc).timestamp()))
-    req = urllib.request.Request(url + "?t=" + bust, headers={"Cache-Control": "no-cache"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode("utf-8")
+    for u in (url, MIRROR.get(url)):
+        if not u:
+            continue
+        try:
+            req = urllib.request.Request(u + "?t=" + bust, headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                txt = r.read().decode("utf-8")
+            if txt.strip():
+                return txt
+        except Exception:
+            continue
+    raise RuntimeError("fetch failed (primary + mirror): " + url)
 
 
 def parse(text):
