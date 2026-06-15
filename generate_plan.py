@@ -220,9 +220,11 @@ def build_plan(s):
         head += f"มอง NEUTRAL — เล่นในกรอบ {sup1}–{res1} รอ breakout ยืนยัน"
 
     now = _bkk_now()
+    hm = now.hour * 60 + now.minute
+    session = "13:00" if hm < 960 else "19:00" if hm < 1275 else "21:30"   # <16:00 / <21:15 / else
     return {
         "updated_at": now.isoformat(timespec="minutes"),
-        "session": "13:00" if now.hour < 16 else "19:00",
+        "session": session,
         "future": fut,
         "spot_cfd": round(spot, 1),
         "basis": basis,
@@ -560,12 +562,10 @@ def plan_is_fresh():
         from datetime import datetime
         plan_ts = datetime.fromisoformat(cur["updated_at"]).timestamp()
         now = _bkk_now()
-        if now.hour >= 19:
-            slot = now.replace(hour=19, minute=0, second=0, microsecond=0)
-        elif now.hour >= 13:
-            slot = now.replace(hour=13, minute=0, second=0, microsecond=0)
-        else:
-            slot = now.replace(hour=19, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        # most recent scheduled slot today that is already past (13:00 / 19:00 / 21:30)
+        todays = [now.replace(hour=h, minute=m, second=0, microsecond=0) for h, m in [(13, 0), (19, 0), (21, 30)]]
+        past = [s for s in todays if s <= now]
+        slot = max(past) if past else (now - timedelta(days=1)).replace(hour=21, minute=30, second=0, microsecond=0)
         return plan_ts >= slot.timestamp()
     except Exception:
         return False

@@ -260,12 +260,14 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '
 const _thaiYMD = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
 const _thaiWeekday = (ms) => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Bangkok', weekday: 'short' }).format(new Date(ms));
 
+const PLAN_SLOTS = [[21, 30], [19, 0], [13, 0]];      // Thai-time daily slots, newest first
 function expectedSlotTs(graceMin) {
   const nowMs = Date.now(), cutoff = nowMs - graceMin * 60000;
   for (let back = 0; back < 6; back++) {              // walk back far enough to clear a weekend
     const dayMs = nowMs - back * 86400000;
-    for (const hh of [19, 13]) {                      // newest slot first
-      const ts = Date.parse(`${_thaiYMD(dayMs)}T${hh < 10 ? '0' + hh : hh}:00:00+07:00`);
+    for (const [hh, mm] of PLAN_SLOTS) {
+      const hs = hh < 10 ? '0' + hh : '' + hh, ms = mm < 10 ? '0' + mm : '' + mm;
+      const ts = Date.parse(`${_thaiYMD(dayMs)}T${hs}:${ms}:00+07:00`);
       if (ts <= cutoff) {
         const wd = _thaiWeekday(ts);
         if (wd !== 'Sat' && wd !== 'Sun') return ts;   // only weekday slots are "expected"
