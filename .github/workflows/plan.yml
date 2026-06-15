@@ -4,8 +4,9 @@ name: Daily Gold Plan
 # Mon–Fri. GitHub cron runs in UTC; ICT = UTC+7 (Thailand has no DST).
 on:
   schedule:
-    - cron: "0 6 * * 1-5"    # 06:00 UTC = 13:00 ICT
-    - cron: "0 12 * * 1-5"   # 12:00 UTC = 19:00 ICT
+    # minutes shifted off :00 (GitHub queues are busiest at the top of the hour)
+    - cron: "8 6 * * 1-5"    # 06:08 UTC = 13:08 ICT
+    - cron: "8 12 * * 1-5"   # 12:08 UTC = 19:08 ICT
   workflow_dispatch: {}       # allow manual "Run workflow" from the Actions tab
 
 permissions:
