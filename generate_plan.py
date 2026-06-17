@@ -30,6 +30,9 @@ SPOT_SOURCES = [
     ("https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT", lambda j: float(j["price"])),
 ]
 DEFAULT_BASIS = 30.0   # fallback futures−spot gap (book's ~$30) if no source reachable
+# Calibration to the user's broker: free XAU spot feeds sit a few $ off any specific broker.
+# Subtract this so spot_cfd ≈ her Pepperstone XAUUSD (gold-api ran ~$4 above it). Tune if it drifts.
+SPOT_ADJUST = 4.0
 
 
 def fetch_spot():
@@ -93,6 +96,8 @@ def build_plan(s):
 
     # ── futures → CFD/XAUUSD: basis = futures − live spot (fallback to book's ~$30) ──
     spot = fetch_spot()
+    if spot is not None:
+        spot -= SPOT_ADJUST                          # calibrate XAU feed → broker XAUUSD
     if spot is not None and -5 < (fut - spot) < 80:
         basis, basis_live = round(fut - spot, 1), True
     else:
