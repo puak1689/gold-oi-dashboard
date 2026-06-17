@@ -616,13 +616,6 @@ def main():
             json.dump(plan, f, ensure_ascii=False, indent=2)
         print(f"plan.json: bias={plan['bias']} future={plan['future']} session={plan['session']} "
               f"res={[r['price'] for r in plan['resistance']]} sup={[s_['price'] for s_ in plan['support']]}")
-        # Telegram BEFORE git_push — it's what the user cares about most. If it fails here,
-        # git_push never runs, so the live plan.json stays old and the cloud backup
-        # (--if-stale) will regenerate and resend instead of silently skipping.
-        if no_telegram:
-            print("(--no-telegram: skipped notify)")
-        else:
-            notify_telegram(plan, render_chart_png(plan))
         try:
             log_plan_and_evaluate(plan)                        # #3 track record
         except Exception as e:
@@ -631,6 +624,13 @@ def main():
             print("(--no-push: skipped git)")
         else:
             git_push(plan["session"])
+        # Telegram LAST so a fresh remote ≈ a sent message: the cloud backup's --if-stale
+        # (remote-freshness) check then doubles as a "was it already sent?" guard, keeping
+        # the resend dup-safe. _keep_awake stops the PC sleeping before we reach here.
+        if no_telegram:
+            print("(--no-telegram: skipped notify)")
+        else:
+            notify_telegram(plan, render_chart_png(plan))
     finally:
         _keep_awake(False)
 
