@@ -242,19 +242,25 @@ def build_plan(s):
 
 def git_push(session):
     date = _bkk_now().strftime("%Y-%m-%d")
-    subprocess.run(["git", "-C", REPO_DIR, "add", "plan.json", "data"], check=False, capture_output=True, text=True)
-    subprocess.run(["git", "-C", REPO_DIR, "commit", "-m", f"Auto plan {session} {date}"], check=False, capture_output=True, text=True)
-    # Retry push to survive transient network failures (a silent failure would otherwise
-    # strand the commit unpushed until the next run). Rebase between tries in case remote moved.
+    run = lambda *a: subprocess.run(["git", "-C", REPO_DIR, *a], check=False, capture_output=True, text=True)
+    run("add", "plan.json", "data")
+    run("commit", "-m", f"Auto plan {session} {date}")
     for attempt in range(1, 4):
-        r = subprocess.run(["git", "-C", REPO_DIR, "push"], check=False, capture_output=True, text=True)
+        r = run("push")
         if r.returncode == 0:
             print(f"git push: ok (attempt {attempt})")
             return
-        print(f"git push attempt {attempt} failed: {((r.stderr or '') + (r.stdout or '')).strip()[:160]}")
-        subprocess.run(["git", "-C", REPO_DIR, "pull", "--rebase"], check=False, capture_output=True, text=True)
-        time.sleep(8)
-    print("git push: FAILED after 3 attempts — commit stays local, next run will retry")
+        print(f"git push attempt {attempt} failed: {((r.stderr or '') + (r.stdout or '')).strip()[:140]}")
+        # remote moved (cloud/other runner pushed) — rebase our commit on top, preferring OUR
+        # generated files. -X ours auto-resolves so plan.json never gets conflict markers.
+        pr = run("pull", "--rebase", "-X", "ours", "origin", "main")
+        if pr.returncode != 0:                       # never leave a stuck/conflicted tree
+            run("rebase", "--abort")
+            run("reset", "--hard", "origin/main")
+            print("git: rebase conflict — reset to origin (plan regenerates next run)")
+            return
+        time.sleep(5)
+    print("git push: FAILED after 3 attempts")
 
 
 # ── #4: daily OI archive + day-over-day change (book: "Put falling + Call rising" = shift) ──
