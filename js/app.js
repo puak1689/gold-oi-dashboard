@@ -315,13 +315,19 @@ function renderPlan(p) {
       }).join('')}</div>`
     : '';
 
+  const futOf = (cfdVal) => Math.round((cfdVal + b) * 10) / 10;   // CFD → futures (Topstep)
+  const sigLine = (label, cls, e, sl, tp) =>
+    `<div class="entry-nums"><span class="sig-tag ${cls}">${label}</span> เข้า <b>${fmt.px(e)}</b> · SL <b class="c-sl">${fmt.px(sl)}</b> · TP <b class="c-tp">${tp.map((t) => fmt.px(t)).join(' / ')}</b></div>`;
   const entries = (p.entries && p.entries.length)
-    ? `<div class="plan-entries"><div class="plan-eh">🎯 จุดเข้า (${unitTag})</div>${p.entries.map((en) =>
-        `<div class="entry"><span class="entry-side ${en.side === 'short' ? 'b-short' : 'b-long'}">${en.side === 'short' ? 'SHORT' : 'LONG'}</span>` +
-        `<div class="entry-body"><div class="entry-title">${esc(en.title || '')}</div>` +
-        `<div class="entry-nums">เข้า <b>${fmt.px(conv(en.entry))}</b> · SL <b class="c-sl">${fmt.px(conv(en.sl))}</b> · TP <b class="c-tp">${(en.tp || []).map((t) => fmt.px(conv(t))).join(' / ')}</b> · <span class="c-rr">${esc(en.rr || '')}</span></div>` +
-        (en.note ? `<div class="entry-note">${esc(en.note)}</div>` : '') +
-        `</div></div>`).join('')}</div>`
+    ? `<div class="plan-entries"><div class="plan-eh">🎯 จุดเข้า · Signal</div>${p.entries.map((en) => {
+        const tp = en.tp || [];
+        return `<div class="entry"><span class="entry-side ${en.side === 'short' ? 'b-short' : 'b-long'}">${en.side === 'short' ? 'SHORT' : 'LONG'}</span>` +
+          `<div class="entry-body"><div class="entry-title">${esc(en.title || '')} <span class="c-rr">${esc(en.rr || '')}</span></div>` +
+          sigLine('Topstep·fut', 'ts', futOf(en.entry), futOf(en.sl), tp.map(futOf)) +
+          sigLine('CFD·MT5', 'cfd', en.entry, en.sl, tp) +
+          (en.note ? `<div class="entry-note">${esc(en.note)}</div>` : '') +
+          `</div></div>`;
+      }).join('')}</div>`
     : '';
 
   // Topstep position-size calculator (gold futures: GC = $100/point, MGC = $10/point)

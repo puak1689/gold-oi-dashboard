@@ -419,7 +419,13 @@ footer {
 .entry-nums b { font-weight: 600; color: var(--fg0); }
 .entry-nums .c-sl { color: var(--down); }
 .entry-nums .c-tp { color: var(--up); }
-.entry-nums .c-rr { color: var(--fg2); }
+.c-rr { color: var(--fg2); font-family: var(--mono); font-size: 10px; font-weight: 400; }
+.sig-tag {
+  display: inline-block; font-family: var(--mono); font-size: 8.5px; font-weight: 600;
+  padding: 1px 5px; border-radius: 4px; margin-right: 3px; letter-spacing: 0.02em;
+}
+.sig-tag.ts  { color: #fff; background: var(--call); }
+.sig-tag.cfd { color: var(--fg2); background: var(--bg2); border: 1px solid var(--line); }
 .entry-note { font-family: var(--mono); font-size: 10px; color: var(--fg2); margin-top: 3px; line-height: 1.45; }
 
 /* Topstep position-size calculator */
