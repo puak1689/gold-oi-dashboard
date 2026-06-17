@@ -20,12 +20,13 @@ import urllib.request
 import urllib.parse
 import plan_stats as ps
 
-# Live gold spot proxy = PAXG (Pax Gold, 1 token ≈ 1oz, tracks XAU spot). Try several
-# exchanges in order so it works both locally (Thailand) and from GitHub Actions
-# (US/Azure runners — Binance is geo-blocked there, but Coinbase/Kraken are reachable).
+# Live gold spot. Prefer gold-api.com (real XAU/USD spot — closest to broker XAUUSD);
+# fall back to PAXG (Pax Gold ≈ spot, but a few $ off) on Coinbase/Kraken/Binance so it
+# still works if gold-api is down or a venue is geo-blocked from GitHub Actions runners.
 SPOT_SOURCES = [
-    ("https://api.exchange.coinbase.com/products/PAXG-USD/ticker", lambda j: float(j["price"])),
-    ("https://api.kraken.com/0/public/Ticker?pair=PAXGUSD",        lambda j: float(j["result"]["PAXGUSD"]["c"][0])),
+    ("https://api.gold-api.com/price/XAU",                          lambda j: float(j["price"])),
+    ("https://api.exchange.coinbase.com/products/PAXG-USD/ticker",  lambda j: float(j["price"])),
+    ("https://api.kraken.com/0/public/Ticker?pair=PAXGUSD",         lambda j: float(j["result"]["PAXGUSD"]["c"][0])),
     ("https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT", lambda j: float(j["price"])),
 ]
 DEFAULT_BASIS = 30.0   # fallback futures−spot gap (book's ~$30) if no source reachable
