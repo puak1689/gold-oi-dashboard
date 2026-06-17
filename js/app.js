@@ -296,25 +296,47 @@ function renderPlan(p) {
       `<div class="plan-empty">${esc((p && p.headline) || 'ยังไม่มีแผน — ระบบจะสร้างแผนอัตโนมัติเวลา 13:00 และ 19:00 (เวลาไทย)')}</div>`;
     return;
   }
+  state.plan = p;
   const biasMap = { long: ['ขึ้น · Long', 'b-long'], short: ['ลง · Short', 'b-short'], neutral: ['ไซด์เวย์ · Neutral', 'b-neutral'] };
   const [biasTxt, biasCls] = biasMap[p.bias] || biasMap.neutral;
 
-  // levels show CFD primary + futures reference
+  // price unit follows the Futures/CFD toggle. Entries/levels are stored in CFD; add basis for futures.
+  const futMode = state.priceMode === 'fut';
+  const b = p.basis || 0;
+  const conv = (cfdVal) => futMode ? Math.round((cfdVal + b) * 10) / 10 : cfdVal;
+  const unitTag = futMode ? 'Futures · Topstep' : 'CFD · XAUUSD';
+
+  // levels carry both price(=futures strike) and cfd → show the active unit primary, other in ()
   const lvls = (arr, cls, label) => (arr && arr.length)
     ? `<div class="plan-lvls"><span class="plan-lbl ${cls}">${label}</span>${arr.map((l) => {
-        const main = l.cfd != null ? fmt.px(l.cfd) : fmt.px(l.price);
-        const fut = l.cfd != null ? ` <i>fut ${l.price}</i>` : '';
-        return `<span class="plan-lvl ${cls}">${main}${fut}${l.note ? ` <i>· ${esc(l.note)}</i>` : ''}</span>`;
+        const main = futMode ? l.price : (l.cfd != null ? fmt.px(l.cfd) : fmt.px(l.price));
+        const sub  = futMode ? (l.cfd != null ? `cfd ${fmt.px(l.cfd)}` : '') : (l.cfd != null ? `fut ${l.price}` : '');
+        return `<span class="plan-lvl ${cls}">${main}${sub ? ` <i>${sub}</i>` : ''}${l.note ? ` <i>· ${esc(l.note)}</i>` : ''}</span>`;
       }).join('')}</div>`
     : '';
 
   const entries = (p.entries && p.entries.length)
-    ? `<div class="plan-entries"><div class="plan-eh">🎯 จุดเข้า (ราคา CFD/XAUUSD)</div>${p.entries.map((en) =>
+    ? `<div class="plan-entries"><div class="plan-eh">🎯 จุดเข้า (${unitTag})</div>${p.entries.map((en) =>
         `<div class="entry"><span class="entry-side ${en.side === 'short' ? 'b-short' : 'b-long'}">${en.side === 'short' ? 'SHORT' : 'LONG'}</span>` +
         `<div class="entry-body"><div class="entry-title">${esc(en.title || '')}</div>` +
-        `<div class="entry-nums">เข้า <b>${fmt.px(en.entry)}</b> · SL <b class="c-sl">${fmt.px(en.sl)}</b> · TP <b class="c-tp">${(en.tp || []).map((t) => fmt.px(t)).join(' / ')}</b> · <span class="c-rr">${esc(en.rr || '')}</span></div>` +
+        `<div class="entry-nums">เข้า <b>${fmt.px(conv(en.entry))}</b> · SL <b class="c-sl">${fmt.px(conv(en.sl))}</b> · TP <b class="c-tp">${(en.tp || []).map((t) => fmt.px(conv(t))).join(' / ')}</b> · <span class="c-rr">${esc(en.rr || '')}</span></div>` +
         (en.note ? `<div class="entry-note">${esc(en.note)}</div>` : '') +
         `</div></div>`).join('')}</div>`
+    : '';
+
+  // Topstep position-size calculator (gold futures: GC = $100/point, MGC = $10/point)
+  const calcRows = (risk) => (p.entries || []).map((en) => {
+    const dist = Math.abs(en.entry - en.sl);
+    const gc = dist > 0 ? Math.floor(risk / (dist * 100)) : 0;
+    const mgc = dist > 0 ? Math.floor(risk / (dist * 10)) : 0;
+    return `<div class="calc-row"><b class="${en.side === 'short' ? 'b-short' : 'b-long'}">${en.side === 'short' ? 'SHORT' : 'LONG'}</b> SL ${dist.toFixed(0)} จุด → <span class="c-mgc">MGC ${mgc}</span> / <span class="c-gc">GC ${gc}</span> ไม้</div>`;
+  }).join('');
+  const risk0 = +(localStorage.getItem('topstepRisk') || 300);
+  const calc = (p.entries && p.entries.length)
+    ? `<div class="plan-calc"><div class="plan-eh">📐 ขนาดไม้ Topstep (Futures)</div>` +
+      `<label class="calc-risk">เสี่ยงต่อไม้ $ <input id="ts-risk" type="number" value="${risk0}" min="10" step="10"></label>` +
+      `<div id="ts-rows" class="calc-rows">${calcRows(risk0)}</div>` +
+      `<div class="calc-note">MGC (ทองไมโคร) $10/จุด · GC (ทองเต็ม) $100/จุด · ปัดลง — ใส่ลิมิตขาดทุนต่อไม้ของบัญชี Topstep คุณ</div></div>`
     : '';
 
   let when = '';
@@ -339,15 +361,24 @@ function renderPlan(p) {
        <span class="plan-title">📋 แผนวันนี้ <span class="plan-bias ${biasCls}">${biasTxt}</span></span>
        <span class="plan-time"><span class="pdot ${fresh.stale ? 'stale' : 'ok'}"></span>รอบ ${esc(p.session || '')} · ${when}${staleTxt}</span>
      </div>` +
-    (p.spot_cfd != null ? `<div class="plan-cfd">💱 CFD/XAUUSD ≈ <b>${fmt.px(p.spot_cfd)}</b> · futures ${fmt.px(p.future)} · basis −${fmt.px(p.basis)}${p.basis_live ? '' : ' <i>(ประมาณ)</i>'}</div>` : '') +
+    (p.spot_cfd != null ? `<div class="plan-cfd">💱 CFD/XAUUSD ≈ <b>${fmt.px(p.spot_cfd)}</b> · futures ${fmt.px(p.future)} · basis −${fmt.px(p.basis)}${p.basis_live ? '' : ' <i>(ประมาณ)</i>'} · <b class="plan-unit">หน่วย: ${unitTag}</b></div>` : '') +
     (p.headline ? `<div class="plan-headline">${esc(p.headline)}</div>` : '') +
     lvls(p.resistance, 'res', 'แนวต้าน') +
     lvls(p.support, 'sup', 'แนวรับ') +
     entries +
+    calc +
     oicHtml +
     (p.scenarios && p.scenarios.length ? `<ul class="plan-scen">${p.scenarios.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : '') +
     (p.risk ? `<div class="plan-risk">⚠️ ${esc(p.risk)}</div>` : '') +
     `<div class="plan-src">ที่มา: ${esc(p.source || 'The Invisible Money + OI/Vol')} · AI สร้างอัตโนมัติ ไม่ใช่คำแนะนำการลงทุน</div>`;
+
+  const ri = $('ts-risk');
+  if (ri) ri.addEventListener('input', () => {
+    const r = Math.max(0, +ri.value || 0);
+    localStorage.setItem('topstepRisk', r);
+    const rows = $('ts-rows');
+    if (rows) rows.innerHTML = calcRows(r);
+  });
 }
 
 // ── track record: auto-evaluated plan outcomes (approx via PAXG H1) ──
@@ -401,6 +432,7 @@ function setPriceMode(mode) {
   $('px-fut').classList.toggle('active', mode === 'fut');
   $('px-cfd').classList.toggle('active', mode === 'cfd');
   rerenderBell();
+  if (state.plan) renderPlan(state.plan);    // plan levels/entries follow the same unit
 }
 
 // ── source-data freshness: when pageth last pushed OIData.txt (GitHub commit time) ──

@@ -422,6 +422,25 @@ footer {
 .entry-nums .c-rr { color: var(--fg2); }
 .entry-note { font-family: var(--mono); font-size: 10px; color: var(--fg2); margin-top: 3px; line-height: 1.45; }
 
+/* Topstep position-size calculator */
+.plan-unit { color: var(--call); }
+.plan-calc { margin: 10px 0 4px; }
+.calc-risk { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 11px; color: var(--fg1); margin-bottom: 6px; }
+.calc-risk input {
+  width: 72px; font-family: var(--mono); font-size: 11px; padding: 2px 6px;
+  border: 1px solid var(--line2); border-radius: 5px; background: var(--bg1); color: var(--fg0);
+}
+.calc-rows { display: flex; flex-direction: column; gap: 4px; }
+.calc-row {
+  font-family: var(--mono); font-size: 11px; color: var(--fg1);
+  padding: 4px 9px; background: var(--bg2); border: 1px solid var(--line); border-radius: 7px;
+}
+.calc-row b.b-short { color: var(--down); }
+.calc-row b.b-long { color: var(--up); }
+.calc-row .c-mgc { color: var(--fg0); font-weight: 600; }
+.calc-row .c-gc { color: var(--fg2); }
+.calc-note { font-family: var(--mono); font-size: 9px; color: var(--fg3); margin-top: 5px; line-height: 1.4; }
+
 /* OI day-over-day change (inside plan card) */
 .plan-oic { margin: 10px 0 4px; }
 .oic-row {
