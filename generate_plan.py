@@ -583,35 +583,56 @@ def plan_is_fresh():
         return False
 
 
+def _keep_awake(on):
+    """Stop Windows sleeping mid-run. The scheduled task uses WakeToRun, so the PC can wake
+    at 13:00/19:00/21:30, run us, then sleep again before we finish — killing the process
+    after plan.json is pushed but before Telegram sends (seen 2026-06-17 19:00, exit 0xC000013A).
+    No-op off Windows (e.g. GitHub Actions)."""
+    try:
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            (ES_CONTINUOUS | ES_SYSTEM_REQUIRED) if on else ES_CONTINUOUS)
+    except Exception:
+        pass
+
+
 def main():
     no_push = "--no-push" in sys.argv
     no_telegram = "--no-telegram" in sys.argv
     if "--if-stale" in sys.argv and plan_is_fresh():
         print("plan already fresh for this slot — skipping (backup runner)")
         return
-    stats = ps.compute_stats()
-    plan = build_plan(stats)
+    _keep_awake(True)
     try:
-        plan["oi_change"] = archive_oi_and_diff()          # #4 daily OI delta
-    except Exception as e:
-        print("oi_change failed:", e)
-        plan["oi_change"] = None
-    with open(PLAN_PATH, "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False, indent=2)
-    try:
-        log_plan_and_evaluate(plan)                        # #3 track record
-    except Exception as e:
-        print("track failed:", e)
-    print(f"plan.json: bias={plan['bias']} future={plan['future']} session={plan['session']} "
-          f"res={[r['price'] for r in plan['resistance']]} sup={[s_['price'] for s_ in plan['support']]}")
-    if no_push:
-        print("(--no-push: skipped git)")
-    else:
-        git_push(plan["session"])
-    if no_telegram:
-        print("(--no-telegram: skipped notify)")
-    else:
-        notify_telegram(plan, render_chart_png(plan))
+        stats = ps.compute_stats()
+        plan = build_plan(stats)
+        try:
+            plan["oi_change"] = archive_oi_and_diff()          # #4 daily OI delta
+        except Exception as e:
+            print("oi_change failed:", e)
+            plan["oi_change"] = None
+        with open(PLAN_PATH, "w", encoding="utf-8") as f:
+            json.dump(plan, f, ensure_ascii=False, indent=2)
+        print(f"plan.json: bias={plan['bias']} future={plan['future']} session={plan['session']} "
+              f"res={[r['price'] for r in plan['resistance']]} sup={[s_['price'] for s_ in plan['support']]}")
+        # Telegram BEFORE git_push — it's what the user cares about most. If it fails here,
+        # git_push never runs, so the live plan.json stays old and the cloud backup
+        # (--if-stale) will regenerate and resend instead of silently skipping.
+        if no_telegram:
+            print("(--no-telegram: skipped notify)")
+        else:
+            notify_telegram(plan, render_chart_png(plan))
+        try:
+            log_plan_and_evaluate(plan)                        # #3 track record
+        except Exception as e:
+            print("track failed:", e)
+        if no_push:
+            print("(--no-push: skipped git)")
+        else:
+            git_push(plan["session"])
+    finally:
+        _keep_awake(False)
 
 
 if __name__ == "__main__":
