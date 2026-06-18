@@ -258,8 +258,11 @@ def git_push(session):
             return
         print(f"git push attempt {attempt} failed: {((r.stderr or '') + (r.stdout or '')).strip()[:140]}")
         # remote moved (cloud/other runner pushed) — rebase our commit on top, preferring OUR
-        # generated files. -X ours auto-resolves so plan.json never gets conflict markers.
-        pr = run("pull", "--rebase", "-X", "ours", "origin", "main")
+        # freshly-generated files. GOTCHA: in a REBASE the sides are SWAPPED, so "theirs" = our
+        # replayed commit. -X theirs keeps our new plan.json (and auto-resolves so plan.json
+        # never gets conflict markers). The old -X ours took ORIGIN's STALE plan instead —
+        # that silently re-published yesterday's plan while Telegram had today's (2026-06-18).
+        pr = run("pull", "--rebase", "-X", "theirs", "origin", "main")
         if pr.returncode != 0:                       # never leave a stuck/conflicted tree
             run("rebase", "--abort")
             run("reset", "--hard", "origin/main")
