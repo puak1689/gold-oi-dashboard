@@ -2,22 +2,13 @@
  "updated_at": "2026-06-17T22:57+07:00",
  "n_plans": 13,
  "stats": {
-  "tp": 5,
-  "sl": 6,
+  "tp": 9,
+  "sl": 11,
   "no_entry": 4,
-  "open": 9
+  "open": 2
  },
- "win_rate": 45.5,
+ "win_rate": 45.0,
  "recent": [
-  {
-   "ts": "2026-06-15T19:00",
-   "session": "19:00",
-   "bias": "long",
-   "outcomes": [
-    "tp",
-    "sl"
-   ]
-  },
   {
    "ts": "2026-06-15T21:38",
    "session": "21:30",
@@ -32,7 +23,7 @@
    "session": "13:00",
    "bias": "neutral",
    "outcomes": [
-    "open",
+    "sl",
     "no_entry"
    ]
   },
@@ -59,8 +50,8 @@
    "session": "13:00",
    "bias": "neutral",
    "outcomes": [
-    "open",
-    "open"
+    "tp",
+    "sl"
    ]
   },
   {
@@ -69,7 +60,7 @@
    "bias": "neutral",
    "outcomes": [
     "open",
-    "open"
+    "sl"
    ]
   },
   {
@@ -78,7 +69,7 @@
    "bias": "neutral",
    "outcomes": [
     "open",
-    "open"
+    "sl"
    ]
   },
   {
@@ -86,8 +77,8 @@
    "session": "13:00",
    "bias": "neutral",
    "outcomes": [
-    "open",
-    "open"
+    "tp",
+    "sl"
    ]
   },
   {
