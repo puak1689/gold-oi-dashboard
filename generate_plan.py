@@ -29,7 +29,11 @@ SPOT_SOURCES = [
     ("https://api.kraken.com/0/public/Ticker?pair=PAXGUSD",         lambda j: float(j["result"]["PAXGUSD"]["c"][0])),
     ("https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT", lambda j: float(j["price"])),
 ]
-DEFAULT_BASIS = 30.0   # fallback futures−spot gap (book's ~$30) if no source reachable
+# Gold's futures-spot basis is structurally STABLE (~ArmRiley's GC1!−XAUUSD ≈ 18, set by rates).
+# Only trust a LIVE fut−spot reading inside this plausible band — outside it means a feed lagged
+# during a fast move (saw 4.2 then 32.4 within minutes on the 2026-06-18 crash, true basis ~18).
+BASIS_BAND = (10.0, 27.0)
+BASIS_DEFAULT = 18.0   # used only when there's no recent in-band reading to fall back on
 # Calibration to the user's broker: free XAU spot feeds sit a few $ off any specific broker.
 # Subtract this so spot_cfd ≈ her Pepperstone XAUUSD (gold-api ran ~$4 above it). Tune if it drifts.
 SPOT_ADJUST = 4.0
@@ -85,6 +89,19 @@ def _sigma_note(strike, fut, sd):
     return f'{"+" if z > 0 else "−"}{abs(z)}σ'
 
 
+def _last_good_basis():
+    """The previous plan's basis, if it was a live in-band reading — lets us ride out a few
+    volatile runs where the live fut−spot is implausible, instead of dropping to a flat default."""
+    try:
+        p = json.load(open(PLAN_PATH, encoding="utf-8"))
+        b = p.get("basis")
+        if p.get("basis_live") and isinstance(b, (int, float)) and BASIS_BAND[0] <= b <= BASIS_BAND[1]:
+            return float(b)
+    except Exception:
+        pass
+    return None
+
+
 def build_plan(s):
     fut = s["future"]
     sd = s["sigma_points"] or 1
@@ -94,14 +111,20 @@ def build_plan(s):
     call_tail = s.get("call_tail") or {}
     put_tail = s.get("put_tail") or {}
 
-    # ── futures → CFD/XAUUSD: basis = futures − live spot (fallback to book's ~$30) ──
+    # ── futures → CFD/XAUUSD via the futures-spot basis ──
+    # The basis is structurally stable (~18); our two free feeds (pageth's snapshot future +
+    # gold-api spot) each lag during fast moves, so a raw fut−spot can be absurd. Accept it only
+    # inside BASIS_BAND; otherwise reuse the last good basis (or BASIS_DEFAULT) so the CFD levels
+    # stay stable and ≈ her broker instead of swinging with feed noise.
     spot = fetch_spot()
     if spot is not None:
-        spot -= SPOT_ADJUST                          # calibrate XAU feed → broker XAUUSD
-    if spot is not None and -5 < (fut - spot) < 80:
-        basis, basis_live = round(fut - spot, 1), True
+        spot -= SPOT_ADJUST                          # calibrate gold-api XAU → broker XAUUSD
+    raw = (fut - spot) if spot is not None else None
+    if raw is not None and BASIS_BAND[0] <= raw <= BASIS_BAND[1]:
+        basis, basis_live = round(raw, 1), True
     else:
-        basis, basis_live = DEFAULT_BASIS, False
+        lg = _last_good_basis()
+        basis, basis_live = (lg if lg is not None else BASIS_DEFAULT), False
         spot = round(fut - basis, 1)
     cfd = lambda x: round(x - basis, 1)
 
