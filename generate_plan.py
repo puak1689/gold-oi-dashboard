@@ -695,6 +695,7 @@ def write_mt5_plan(plan):
 def main():
     no_push = "--no-push" in sys.argv
     no_telegram = "--no-telegram" in sys.argv
+    mt5_only = "--mt5-only" in sys.argv      # VPS mode: feed the EA file only (no web/Telegram/track)
     if "--if-stale" in sys.argv and plan_is_fresh():
         print("plan already fresh for this slot — skipping (backup runner)")
         return
@@ -702,6 +703,10 @@ def main():
     try:
         stats = ps.compute_stats()
         plan = build_plan(stats)
+        if mt5_only:                                    # VPS: just write gold_plan.csv for the EA, then stop
+            write_mt5_plan(plan)
+            print(f"mt5-only: bias={plan['bias']} future={plan['future']} session={plan['session']} basis={plan['basis']}")
+            return
         try:
             plan["oi_change"] = archive_oi_and_diff()          # #4 daily OI delta
         except Exception as e:
