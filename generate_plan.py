@@ -128,14 +128,39 @@ def build_plan(s):
         spot = round(fut - basis, 1)
     cfd = lambda x: round(x - basis, 1)
 
-    # ── bias: dominant signal = the day's move vs σ. High vol => follow the trend (don't fade). ──
-    move = chg / sd if sd else 0
-    if move <= -0.4:
-        bias, dirword = "short", "ลง"
-    elif move >= 0.4:
-        bias, dirword = "long", "ขึ้น"
+    # ── bias: blend the day's momentum with OI structure + an extreme-P/C contrarian flag,
+    # weighted by Vol regime. Books: OI structure & σ-position pick the side; in HIGH vol follow
+    # the trend / don't fade; a P/C ratio at an extreme = crowd all-in → contrarian reversal. ──
+    dirword = "ขึ้น" if chg > 0 else "ลง" if chg < 0 else "ออกข้าง"   # the day's move (for headline)
+    mom = chg / sd if sd else 0.0                       # today's move vs σ (trend/momentum)
+    z_oi = s.get("z_vs_oi_mean") or 0.0                 # future vs OI centre of gravity
+    oi_pull = -z_oi                                     # mean-reversion back toward the OI bulk
+    pcr = s.get("pcr_oi")
+    pcr_warn = ""
+    if pcr is not None and pcr < 0.55:
+        pcr_vote, pcr_warn = -0.8, f"P/C OI {pcr} ต่ำมาก (Call ล้น = ฝูงชนเชียร์ขึ้นหมดแล้ว) → ระวังกลับหัวลง"
+    elif pcr is not None and pcr > 1.7:
+        pcr_vote, pcr_warn = 0.8, f"P/C OI {pcr} สูงมาก (Put ล้น = แห่กลัวลงสุดขีด) → ระวังเด้งกลับขึ้น"
     else:
-        bias, dirword = "neutral", "ออกข้าง"
+        pcr_vote = 0.0
+    if regime == "high":          # don't fade a volatile trend (กฎทอง)
+        w_mom, w_oi, w_pcr = 1.0, 0.2, 0.4
+    elif regime == "low":         # quiet range — mean-reversion toward the OI bulk dominates
+        w_mom, w_oi, w_pcr = 0.6, 0.8, 0.8
+    else:
+        w_mom, w_oi, w_pcr = 0.8, 0.5, 0.7
+    score = w_mom * mom + w_oi * oi_pull + w_pcr * pcr_vote
+    bias = "short" if score <= -0.4 else "long" if score >= 0.4 else "neutral"
+    # which factors pushed it that way — shown in the headline so the call stays transparent
+    sgn = -1 if bias == "short" else 1 if bias == "long" else 0
+    why = []
+    if sgn and mom * sgn > 0.2:
+        why.append("โมเมนตัม" + ("ลง" if mom < 0 else "ขึ้น"))
+    if sgn and oi_pull * sgn > 0.2:
+        why.append("ราคา" + ("เหนือ" if z_oi > 0 else "ใต้") + " Mean OI")
+    if sgn and pcr_vote * sgn > 0:
+        why.append("P/C สุดขั้วสวนทาง")
+    bias_why = " + ".join(why) if why else "ยังไม่เลือกข้าง"
 
     # ── resistance / support level objects with methodology notes ──
     def level(w, kind):
@@ -228,6 +253,8 @@ def build_plan(s):
         bits.append("ผันผวนต่ำ (regime เขียว) → Mean Reversion ตามแนว OI แม่นขึ้น แต่ระวัง breakout เงียบ ๆ")
     else:
         bits.append("ผันผวนปกติ → เทรดตามแนว OI ได้ แต่ยังต้องรอจังหวะยืนยัน")
+    if pcr_warn:
+        bits.append(pcr_warn + " — รอ price action ยืนยันก่อนสวน")
     bits.append("ทองลงแรงกว่าขึ้น + fat tails → RR ต้องเป็นบวก อย่าเติมไม้ตอนแพง")
     bits.append("รอไส้เทียน H1/H4 ยืนยันก่อนเข้า วาง SL หลังไส้/หลังกำแพง OI · RR ≥ 1:2")
     if s["dte"] < 1:
@@ -242,11 +269,13 @@ def build_plan(s):
     head = (f"ทอง{dirword} {chg_txt} มาที่ {fut} · IV {s['atm_iv']}% (regime {regime}) · "
             f"P/C OI {s.get('pcr_oi')} · {skew_txt} (Put {s['iv_skew']['put_side_avg']}% vs Call {s['iv_skew']['call_side_avg']}%). ")
     if bias == "short":
-        head += f"มอง SHORT ตามเทรนด์ — รอเด้งชนแนวต้าน {res1} แล้วค่อยหาจังหวะ อย่าไล่"
+        head += f"มอง SHORT ({bias_why}) — รอเด้งชนแนวต้าน {res1} แล้วค่อยหาจังหวะ อย่าไล่"
     elif bias == "long":
-        head += f"มอง LONG ตามเทรนด์ — รอย่อหาแนวรับ {sup1} แล้วค่อยหาจังหวะ อย่าไล่"
+        head += f"มอง LONG ({bias_why}) — รอย่อหาแนวรับ {sup1} แล้วค่อยหาจังหวะ อย่าไล่"
     else:
         head += f"มอง NEUTRAL — เล่นในกรอบ {sup1}–{res1} รอ breakout ยืนยัน"
+    if pcr_warn:
+        head += f" · ⚠️ {pcr_warn}"
 
     now = _bkk_now()
     hm = now.hour * 60 + now.minute
