@@ -55,6 +55,7 @@ def fetch_spot():
 
 
 COT_URL = "https://publicreporting.cftc.gov/resource/6dca-aqww.json"
+COT_EXTREME = 60000   # |Small-Specs net| ≥ this = retail "สุดขั้ว" (rough fallback — no history fetched, not a true percentile). Fade only counts when extreme; comm/spec are mirror images (zero-sum) so they are ONE axis, not two votes.
 
 
 def fetch_cot():
@@ -78,7 +79,8 @@ def fetch_cot():
         for key, p in (("comm", "comm"), ("spec", "noncomm"), ("retail", "nonrept")):
             n = net(cur, p)
             out[key] = {"net": n, "chg": n - net(prev, p)}
-        out["retail_lean"] = "down" if out["retail"]["net"] > 0 else ("up" if out["retail"]["net"] < 0 else "flat")
+        out["retail_lean"] = (("down" if out["retail"]["net"] > 0 else "up")
+                              if abs(out["retail"]["net"]) >= COT_EXTREME else "flat")   # fade ONLY when retail is extreme
         return out
     except Exception as e:
         print("cot fetch failed:", e)
@@ -193,8 +195,8 @@ def build_plan(s):
     cot = fetch_cot()                                   # CFTC weekly positioning (book Ch3)
     cot_vote = 0.0
     if cot:
-        rn = cot["retail"]["net"]                       # fade retail (Small Specs usually wrong)
-        cot_vote = -0.3 if rn > 0 else 0.3 if rn < 0 else 0.0
+        # fade retail ONLY when genuinely extreme (retail_lean is extremity-gated, not merely net>0)
+        cot_vote = -0.3 if cot["retail_lean"] == "down" else 0.3 if cot["retail_lean"] == "up" else 0.0
     if regime == "high":          # don't fade a volatile trend (กฎทอง)
         w_mom, w_oi, w_pcr = 1.0, 0.2, 0.4
     elif regime == "low":         # quiet range — mean-reversion toward the OI bulk dominates
@@ -326,8 +328,9 @@ def build_plan(s):
     if g_up and g_dn:
         bits.append(f"$50 Grid (Block Trade): ต้านใกล้สุด {g_up['price']} (CFD {g_up['cfd']}{' ★OI' if g_up['oi'] else ''}) / รับใกล้สุด {g_dn['price']} (CFD {g_dn['cfd']}{' ★OI' if g_dn['oi'] else ''}) — ทุกระดับ $50/$100 = ด่าน MM hedge")
     if cot:
-        lean = {"down": "น้ำหนักลง", "up": "น้ำหนักขึ้น", "flat": "กลางๆ"}[cot["retail_lean"]]
-        bits.append(f"COT {cot['date']} (CFTC รายสัปดาห์): รายย่อย net {cot['retail']['net']:+,} → สวน = {lean} · กองทุน(specs) net {cot['spec']['net']:+,} · เงินฉลาด(comm) net {cot['comm']['net']:+,}")
+        lean = {"down": "สุดขั้ว → สวน = น้ำหนักลง", "up": "สุดขั้ว → สวน = น้ำหนักขึ้น",
+                "flat": "ยังไม่สุดขั้ว → แทบไม่มีน้ำหนัก (รอราคายืนยัน)"}[cot["retail_lean"]]
+        bits.append(f"COT {cot['date']} (CFTC รายสัปดาห์): รายย่อย net {cot['retail']['net']:+,} {lean} · กองทุน(specs) net {cot['spec']['net']:+,} · Smart money(comm) net {cot['comm']['net']:+,} (comm+spec = แกนเดียว กระจกกัน)")
     risk = "; ".join(bits)
 
     # ── headline ──

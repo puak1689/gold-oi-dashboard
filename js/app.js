@@ -435,6 +435,39 @@ function renderGrid(p) {
 }
 
 // ── COT (CFTC weekly positioning): smart money + fade retail (book Ch3) ──
+// build the plain-Thai "📌 สรุป" line (verified logic): direction comes ONLY from how EXTREME retail
+// (Small Specs) is — never from the comm minus-sign; comm+spec are mirror images (one fund-flow axis,
+// %-filtered for noise); unclear → say "กลางๆ/รอยืนยัน" rather than force a side.
+const COT_EXTREME = 60000;   // |retail net| ≥ this = "สุดขั้ว" (rough fallback; mirrors generate_plan COT_EXTREME)
+function cotSummary(c) {
+  const f = (n) => (n >= 0 ? '+' : '') + Math.round(n).toLocaleString();
+  const rn = c.retail.net, cn = c.comm.net, cc = c.comm.chg;
+  // STEP A — direction from retail EXTREMITY (the level, not the weekly change)
+  let dir = null, retailStrong = false;
+  if (Math.abs(rn) >= COT_EXTREME) { dir = rn > 0 ? 'ลง' : 'ขึ้น'; retailStrong = true; }
+  // STEP B — single fund-flow axis from comm.chg, filtered by % (small wk move = noise)
+  const commPct = cn !== 0 ? cc / Math.abs(cn) : 0;
+  const commPctTxt = (Math.abs(commPct) * 100).toFixed(1) + '%';
+  const commShort = cn < 0 ? (cc > 0 ? `ลด short ${f(cc)}` : cc < 0 ? `เพิ่ม short ${f(cc)}` : 'ทรงตัว') : `chg ${f(cc)}`;
+  let fundLean = 'noise';
+  if (commPct >= 0.05) fundLean = 'ขึ้น';        // easing forward-sales = light up-tone (lagging)
+  else if (commPct <= -0.05) fundLean = 'ลง';
+  // STEP C/D — verdict FIRST, then one-clause reason, then a fixed caveat
+  const cav = ' · <span class="cot-cav">ข้อมูลรายสัปดาห์ (ดีเลย์ ~3 วัน) ใช้ดูภาพรวม ไม่ใช่จุดเข้า-ออก/แนวรับต้าน · เป็นทองฟิวเจอร์ COMEX ไม่ตรงแท่งต่อแท่งกับ XAUUSD โบรก</span>';
+  let opener, reason;
+  if (!retailStrong) {
+    opener = 'COT สัปดาห์นี้ยังไม่เลือกข้างชัด';
+    reason = `รายย่อยถือ net ${f(rn)} (${rn > 0 ? 'ยัง long' : rn < 0 ? 'ยัง short' : 'กลาง'} แต่<b>ยังไม่สุดขั้ว</b>) สัญญาณสวนจึงแทบไม่มีน้ำหนัก · ผู้ผลิต/กองทุนขยับแค่ ~${commPctTxt} ของยอด (ผู้ผลิต${commShort}) = ระดับ noise → สุทธิ <b>กลางๆ รอราคายืนยัน</b>`;
+  } else {
+    const pos = rn > 0 ? 'long' : 'short';
+    const opp = fundLean !== 'noise' && fundLean !== dir;
+    if (opp) { opener = 'สัญญาณขัดกัน → รอราคายืนยัน'; reason = `รายย่อยถือ ${pos} <b>สุดขั้ว</b> → สวนชี้<b>${dir}</b> แต่แกนผู้ผลิต/กองทุนขยับก้อนใหญ่ (~${commPctTxt}) สวนทาง อย่าเพิ่งมั่นใจ`; }
+    else if (fundLean === dir) { opener = `น้ำหนักเอน<b>${dir}</b>`; reason = `รายย่อยถือ ${pos} <b>สุดขั้ว</b> → สวนเป็น${dir} และแกนผู้ผลิต/กองทุนหนุนทางเดียวกัน (~${commPctTxt})`; }
+    else { opener = `น้ำหนักเอน<b>${dir}</b>อ่อนๆ`; reason = `รายย่อยถือ ${pos} <b>สุดขั้ว</b> → สวนเป็น${dir} (ผู้ผลิต/กองทุนสัปดาห์นี้แค่ noise ~${commPctTxt})`; }
+  }
+  return `📌 <b>สรุป:</b> ${opener} — ${reason}${cav}`;
+}
+
 function renderCot(p) {
   const el = $('cot');
   if (!el) return;
@@ -442,15 +475,22 @@ function renderCot(p) {
   if (!c) { el.innerHTML = ''; el.style.display = 'none'; return; }
   const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString();
   const arrow = (chg) => chg > 0 ? `<span class="c-up">▲ ${fmt(chg)}</span>` : chg < 0 ? `<span class="c-dn">▼ ${fmt(chg)}</span>` : '—';
-  const lean = { down: 'long → สวน = น้ำหนักลง', up: 'short → สวน = น้ำหนักขึ้น', flat: 'กลางๆ' }[c.retail_lean];
+  const rn = c.retail.net, cn = c.comm.net;
+  // row notes are honest about extremity: fade only bites when retail is extreme; comm short is structural
+  const retailNote = Math.abs(rn) >= COT_EXTREME
+    ? (rn > 0 ? 'long สุดขั้ว → สวน = ลง' : 'short สุดขั้ว → สวน = ขึ้น')
+    : (rn > 0 ? 'long แต่ยังไม่สุดขั้ว → สวนอ่อนๆ' : rn < 0 ? 'short แต่ยังไม่สุดขั้ว → สวนอ่อนๆ' : 'กลางๆ');
+  const commNote = cn < 0
+    ? (c.comm.chg > 0 ? 'short ปกติ(โครงสร้าง) · สัปดาห์นี้ลด short' : c.comm.chg < 0 ? 'short ปกติ(โครงสร้าง) · สัปดาห์นี้เพิ่ม short' : 'short ปกติ(โครงสร้าง)')
+    : 'ดูตอนสุดขั้ว';
   const rows = [
-    ['เงินฉลาด · Commercials', c.comm, 'ผู้ผลิต/hedge · ดูตอนสุดขั้ว'],
-    ['กองทุน · Large Specs', c.spec, 'ตามเทรนด์'],
-    ['รายย่อย · Small Specs', c.retail, lean],
+    ['Smart money · Commercials', c.comm, commNote],
+    ['กองทุน · Large Specs', c.spec, 'ตามเทรนด์ (กระจกของ Commercials)'],
+    ['รายย่อย · Small Specs', c.retail, retailNote],
   ];
   el.style.display = '';
   el.innerHTML =
-    `<div class="cot-head">🏛️ COT · Commitment of Traders <span class="cot-sub">CFTC รายสัปดาห์ · ${c.date} · รายย่อยมักผิด → สวน</span></div>` +
+    `<div class="cot-head">🏛️ COT · Commitment of Traders <span class="cot-sub">CFTC รายสัปดาห์ · ${c.date} · รายย่อยมักผิด → สวน (= ทำตรงข้ามรายย่อย)</span></div>` +
     `<div class="cot-rows">` +
     rows.map(([label, g, note]) =>
       `<div class="cot-row"><span class="cot-label">${label}</span>` +
@@ -458,7 +498,8 @@ function renderCot(p) {
       `<span class="cot-chg">${arrow(g.chg)}</span>` +
       `<span class="cot-note">${note}</span></div>`
     ).join('') +
-    `</div>`;
+    `</div>` +
+    `<div class="cot-summary">${cotSummary(c)}</div>`;
 }
 
 async function loadPlan() {
