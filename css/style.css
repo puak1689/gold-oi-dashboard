@@ -328,6 +328,27 @@ header {
   color: var(--fg2);
   margin-bottom: 8px;
 }
+.grid-wrap {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.grid-head { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+.grid-sub { display: block; font-weight: 400; font-size: 10px; color: var(--mut); letter-spacing: 0; margin-top: 3px; }
+.grid-rows { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+.g-row { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 13px; padding: 4px 8px; border-radius: 6px; }
+.g-res { background: rgba(192, 57, 43, 0.07); }
+.g-sup { background: rgba(47, 143, 78, 0.07); }
+.g-px { font-weight: 600; min-width: 52px; }
+.g-res .g-px { color: var(--down); }
+.g-sup .g-px { color: var(--up); }
+.g-cfd { color: var(--mut); font-size: 12px; }
+.g-tags { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.g-oi { color: var(--put); font-weight: 600; font-size: 11px; }
+.g-100 { color: var(--mut); font-size: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.g-now { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--mut); padding: 5px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); margin: 3px 0; }
 .senti-wrap { margin-bottom: 24px; }
 .senti-frame {
   border: 1px solid var(--line);

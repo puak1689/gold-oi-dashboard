@@ -410,12 +410,37 @@ async function loadTrack() {
   } catch (e) { el.innerHTML = ''; el.style.display = 'none'; }
 }
 
+// ── $50 Grid: round Block-Trade levels (book Ch6) in their own clear section ──
+function renderGrid(p) {
+  const el = $('grid');
+  if (!el) return;
+  if (!p || !Array.isArray(p.grid) || !p.grid.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  const fut = p.future;
+  const rows = p.grid.slice().sort((a, b) => b.price - a.price);   // high → low
+  let inner = '', marked = false;
+  rows.forEach((g) => {
+    if (!marked && g.price <= fut) {
+      inner += `<div class="g-now">— ราคาปัจจุบัน ≈ ${fut} (CFD ${(fut - p.basis).toFixed(1)}) —</div>`;
+      marked = true;
+    }
+    const tags = (g.oi ? '<span class="g-oi">★ กำแพง OI</span>' : '') + (g.r100 ? '<span class="g-100">$100</span>' : '');
+    inner += `<div class="g-row g-${g.price > fut ? 'res' : 'sup'}">` +
+      `<span class="g-px">${g.price}</span><span class="g-cfd">CFD ${g.cfd}</span><span class="g-tags">${tags}</span></div>`;
+  });
+  if (!marked) inner += `<div class="g-now">— ราคาปัจจุบัน ≈ ${fut} —</div>`;
+  el.style.display = '';
+  el.innerHTML =
+    `<div class="grid-head">🎯 $50 Grid <span class="grid-sub">ด่าน Block Trade · เลขกลม $50/$100 = แนวรับต้านธรรมชาติ (★ = ตรงกำแพง OI ยิ่งแข็ง) · CFD = −basis ${p.basis}</span></div>` +
+    `<div class="grid-rows">${inner}</div>`;
+}
+
 async function loadPlan() {
   try {
     const res = await fetch('plan.json?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('no plan');
     const p = await res.json();
     renderPlan(p);
+    renderGrid(p);
     // adopt the plan's live basis for the bell-chart CFD mode
     if (typeof p.basis === 'number' && p.basis > -5 && p.basis < 80) {
       const changed = Math.abs(p.basis - state.basis) > 0.01;
@@ -424,6 +449,7 @@ async function loadPlan() {
     }
   } catch (e) {
     renderPlan(null);
+    renderGrid(null);
   }
 }
 
