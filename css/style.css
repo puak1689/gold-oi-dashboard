@@ -328,6 +328,14 @@ header {
   color: var(--fg2);
   margin-bottom: 8px;
 }
+.senti-wrap { margin-bottom: 24px; }
+.senti-frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg1);
+}
+.senti-frame iframe { display: block; width: 100%; border: 0; }
 .chart-wrap { margin-bottom: 24px; }
 .tv-frame {
   height: 520px;
