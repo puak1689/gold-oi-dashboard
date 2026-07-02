@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=15">
+<link rel="stylesheet" href="css/style.css?v=16">
 </head>
 <body>
 <div class="page">
@@ -31,6 +31,9 @@
   </header>
 
   <div class="status-line"><span class="pulse" id="pulse"></span><span id="status">กำลังโหลด…</span></div>
+
+  <!-- ── "plan updating" banner (shown by app.js during the GitHub-Pages rebuild lag) ── -->
+  <div class="stale-banner" id="stale-banner" style="display:none"></div>
 
   <!-- ── AI PLAN (from The Invisible Money method, 13:00 & 19:00) ── -->
   <section class="plan-card" id="plan"><!-- filled by app.js --></section>
@@ -121,6 +124,6 @@
 </div>
 
 <script src="js/data.js?v=3"></script>
-<script src="js/app.js?v=15"></script>
+<script src="js/app.js?v=16"></script>
 </body>
 </html>

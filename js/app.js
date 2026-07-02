@@ -502,6 +502,52 @@ function renderCot(p) {
     `<div class="cot-summary">${cotSummary(c)}</div>`;
 }
 
+// ── "plan is updating" banner: a newer session should be live but GitHub Pages hasn't rebuilt the CDN
+//    yet (~1–3 min lag after each 13:00/19:00/21:30 run). Reassure + self-poll until it catches up. ──
+function ictParts() {
+  const d = new Date();
+  const t = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false, hour: '2-digit', minute: '2-digit' });
+  const [h, m] = t.split(':').map(Number);
+  return {
+    date: d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }),                 // YYYY-MM-DD (ICT)
+    wd: d.toLocaleDateString('en-US', { timeZone: 'Asia/Bangkok', weekday: 'short' }), // Mon..Sun (ICT)
+    hm: h * 60 + m,
+  };
+}
+const SLOT_ORDER = { '13:00': 1, '19:00': 2, '21:30': 3 };
+const SLOT_MIN = { '13:00': 780, '19:00': 1140, '21:30': 1290 };
+function expectedSlot(t) {                        // the session that SHOULD be live now (Mon–Fri), else null
+  if (t.wd === 'Sat' || t.wd === 'Sun') return null;
+  if (t.hm >= 1290) return '21:30';
+  if (t.hm >= 1140) return '19:00';
+  if (t.hm >= 780) return '13:00';
+  return null;
+}
+function staleSlot(plan) {                         // the awaited session if the shown plan is behind, else null
+  const now = ictParts();
+  const exp = expectedSlot(now);
+  if (!exp) return null;
+  const planDate = (plan.updated_at || '').slice(0, 10);
+  const behind = planDate < now.date || (planDate === now.date && SLOT_ORDER[plan.session] < SLOT_ORDER[exp]);
+  if (!behind) return null;
+  if (now.hm - SLOT_MIN[exp] > 20) return null;    // >20 min late = likely a real miss, not build-lag → stay quiet
+  return exp;
+}
+let _stalePoll = null;
+function updateStaleBanner(plan) {
+  const el = $('stale-banner');
+  if (!el) return;
+  const sess = plan ? staleSlot(plan) : null;
+  if (sess) {
+    el.style.display = '';
+    el.innerHTML = `⏳ <b>รอบ ${sess} กำลังอัปเดต</b> — เว็บกำลัง build (~1–2 นาที) เดี๋ยวขึ้นเอง ไม่ต้องรีเฟรช`;
+    if (!_stalePoll) _stalePoll = setTimeout(() => { _stalePoll = null; loadPlan(); }, 25000);
+  } else {
+    el.style.display = 'none';
+    if (_stalePoll) { clearTimeout(_stalePoll); _stalePoll = null; }
+  }
+}
+
 async function loadPlan() {
   try {
     const res = await fetch('plan.json?t=' + Date.now(), { cache: 'no-store' });
@@ -510,6 +556,7 @@ async function loadPlan() {
     renderPlan(p);
     renderGrid(p);
     renderCot(p);
+    updateStaleBanner(p);
     // adopt the plan's live basis for the bell-chart CFD mode
     if (typeof p.basis === 'number' && p.basis > -5 && p.basis < 80) {
       const changed = Math.abs(p.basis - state.basis) > 0.01;
@@ -520,6 +567,7 @@ async function loadPlan() {
     renderPlan(null);
     renderGrid(null);
     renderCot(null);
+    updateStaleBanner(null);
   }
 }
 
