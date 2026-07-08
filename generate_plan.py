@@ -382,6 +382,7 @@ def build_plan(s):
         "atm_iv": s["atm_iv"],
         "dte": s["dte"],
         "bias": bias,
+        "bias_score": round(score, 3),      # raw blend score (watchdog uses it for ±0.5 hysteresis)
         "headline": head,
         "resistance": res,
         "support": sup,
