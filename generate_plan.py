@@ -32,9 +32,10 @@ SPOT_SOURCES = [
 # Gold's futures-spot basis is SLOW-MOVING but it does drift (carry shrinks toward expiry, jumps
 # on roll). The user recalibrates it from her ArmRiley GC1!−XAUUSD: ~18-20 in mid-June 2026, then
 # she reported **12.5 on 2026-07-09** → band re-centred. Only trust a LIVE fut−spot reading inside
-# this band; outside = a feed lagged (saw 4.2/32.4 on the 2026-06-18 crash). When she says the
-# basis drifted again, re-centre BASIS_BAND (±2.5) and BASIS_DEFAULT on her number.
-BASIS_BAND = (10.0, 15.0)
+# this band; outside = a feed lagged (saw 4.2/32.4 on the 2026-06-18 crash; 14.9 during the
+# 2026-07-09 bounce while she read 12.5 — fast moves inflate raw fut−spot). When she says the
+# basis drifted again, re-centre BASIS_BAND (±2) and BASIS_DEFAULT on her number.
+BASIS_BAND = (10.5, 14.5)
 BASIS_DEFAULT = 12.5   # her verified ArmRiley reading 2026-07-09; used when live is out-of-band
 # Calibration to the user's broker: free XAU spot feeds sit a few $ off any specific broker.
 # Subtract this so spot_cfd ≈ her Pepperstone XAUUSD (gold-api ran ~$4 above it). Tune if it drifts.
