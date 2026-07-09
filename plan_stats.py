@@ -34,6 +34,11 @@ IN_URL = "https://raw.githubusercontent.com/pageth/Vol2VolData/main/IntradayData
 OI_MIRROR = "https://raw.githubusercontent.com/perpetualpp-rgb/gold-oi-dashboard/main/data/mirror/OIData.txt"
 IN_MIRROR = "https://raw.githubusercontent.com/perpetualpp-rgb/gold-oi-dashboard/main/data/mirror/IntradayData.txt"
 MIRROR = {OI_URL: OI_MIRROR, IN_URL: IN_MIRROR}
+# pageth's LIVE file via the GitHub *API* host — a different service from raw.githubusercontent.com,
+# so it keeps working (and stays fresh) during a sustained raw-CDN 429 (2026-07-09: raw 429'd for
+# hours while api.github.com served pageth's 14:13 push fine). Unauth quota 60 req/h ≫ our usage.
+API_CONTENT = {OI_URL: "https://api.github.com/repos/pageth/Vol2VolData/contents/OIData.txt",
+               IN_URL: "https://api.github.com/repos/pageth/Vol2VolData/contents/IntradayData.txt"}
 
 BASIS = 30.0   # approx Gold futures premium over XAUUSD spot (book: ~$30; ->0 near expiry)
 
@@ -66,12 +71,31 @@ def fetch(url):
                 last = u + ": empty body"
             except Exception as e:
                 last = f"{u}: {e}"
+                if "429" in str(e):
+                    break                          # sustained per-IP rate-limit — 12s retries won't clear it
             if attempt < 2:
-                _t.sleep(6 * (attempt + 1))       # 6s, 12s backoff — ride out a brief 429
-    txt = _git_mirror_text(url)                        # tier 3: git protocol (immune to raw-CDN 429)
+                _t.sleep(6 * (attempt + 1))       # 6s, 12s backoff — ride out a brief hiccup
+    txt = _api_content_text(url)                       # tier 3: GitHub API host (fresh, immune to raw-CDN 429)
     if txt and txt.strip():
         return txt
-    raise RuntimeError("fetch failed (primary + mirror + git): " + url + " · " + last)
+    txt = _git_mirror_text(url)                        # tier 4: git protocol (our mirror — may lag a few hours)
+    if txt and txt.strip():
+        return txt
+    raise RuntimeError("fetch failed (primary + mirror + api + git): " + url + " · " + last)
+
+
+def _api_content_text(url):
+    api = API_CONTENT.get(url)
+    if not api:
+        return None
+    try:
+        req = urllib.request.Request(api, headers={"User-Agent": "gold-oi-dashboard",
+                                                   "Accept": "application/vnd.github.raw+json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            txt = r.read().decode("utf-8")
+        return txt if txt.strip() else None
+    except Exception:
+        return None
 
 
 _GIT_FETCHED = False
