@@ -668,7 +668,7 @@ function setView(v) {
 // NOTE: COMEX:GC1! (gold futures) needs a CME data subscription on TradingView and
 // won't load in the free widget. Default to spot gold (OANDA:XAUUSD, ~tracks GC).
 // allow_symbol_change is on, so you can switch to your own GC symbol in the chart.
-const TV_SYMBOL = 'CITYINDEX:XAUUSD';
+const TV_SYMBOL = 'OANDA:XAUUSD';
 function mountTradingView() {
   const c = $('tv');
   const dark = state.theme === 'dark';
