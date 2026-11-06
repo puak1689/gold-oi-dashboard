@@ -1,6 +1,6 @@
 {
- "updated_at": "2026-11-06T21:08+07:00",
- "n_plans": 237,
+ "updated_at": "2026-11-07T02:18+07:00",
+ "n_plans": 238,
  "stats": {
   "tp": 25,
   "sl": 47,
@@ -9,12 +9,6 @@
  },
  "win_rate": 34.7,
  "recent": [
-  {
-   "ts": "2026-10-30T01:25",
-   "session": "13:00",
-   "bias": "short",
-   "outcomes": null
-  },
   {
    "ts": "2026-10-30T19:41",
    "session": "19:00",
@@ -66,6 +60,12 @@
   {
    "ts": "2026-11-06T21:08",
    "session": "19:00",
+   "bias": "short",
+   "outcomes": null
+  },
+  {
+   "ts": "2026-11-07T02:18",
+   "session": "13:00",
    "bias": "short",
    "outcomes": null
   }
